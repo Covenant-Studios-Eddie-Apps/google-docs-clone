@@ -7,6 +7,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Typography from '@tiptap/extension-typography';
 import { Document, saveDocument } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 import EditorToolbar from './EditorToolbar';
 
 interface Props {
@@ -25,26 +26,28 @@ export default function DocEditor({ doc }: Props) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const docRef = useRef<Document>(doc);
   const titleRef = useRef(title);
+  // Track whether the current update came from a remote realtime event to avoid loops
+  const isRemoteUpdate = useRef(false);
 
   titleRef.current = title;
 
   const persistDoc = useCallback(
-    (content: string, currentTitle: string) => {
-      const updated: Document = {
-        ...docRef.current,
+    async (content: Record<string, unknown> | null, currentTitle: string) => {
+      const updated = await saveDocument({
+        id: docRef.current.id,
         title: currentTitle,
         content,
-        updatedAt: Date.now(),
-      };
-      docRef.current = updated;
-      saveDocument(updated);
+      });
+      if (updated) {
+        docRef.current = updated;
+      }
       setSaveStatus('saved');
     },
     []
   );
 
   const scheduleSave = useCallback(
-    (content: string) => {
+    (content: Record<string, unknown>) => {
       setSaveStatus('saving');
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
@@ -61,11 +64,12 @@ export default function DocEditor({ doc }: Props) {
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Typography,
     ],
-    content: doc.content ? JSON.parse(doc.content) : '<p></p>',
+    content: doc.content ?? '<p></p>',
     onUpdate: ({ editor }) => {
+      if (isRemoteUpdate.current) return;
       const text = editor.getText();
       setWordCount(countWords(text));
-      scheduleSave(JSON.stringify(editor.getJSON()));
+      scheduleSave(editor.getJSON() as Record<string, unknown>);
     },
     editorProps: {
       attributes: {
@@ -75,21 +79,58 @@ export default function DocEditor({ doc }: Props) {
     },
   });
 
+  // Set initial word count
   useEffect(() => {
-    if (editor && doc.content) {
-      try {
-        const parsed = JSON.parse(doc.content);
-        const text = editor.getText();
-        setWordCount(countWords(text));
-        // Only set if editor is empty on mount
-        if (!editor.getText()) {
-          editor.commands.setContent(parsed);
-        }
-      } catch {
-        // ignore
-      }
+    if (editor) {
+      setWordCount(countWords(editor.getText()));
     }
-  }, [editor, doc.content]);
+  }, [editor]);
+
+  // Real-time subscription — listen for changes from other users
+  useEffect(() => {
+    const channel = supabase
+      .channel(`document:${doc.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'documents',
+          filter: `id=eq.${doc.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as Document;
+          // Update title if changed remotely
+          if (updated.title !== titleRef.current) {
+            setTitle(updated.title);
+          }
+          // Update editor content if changed remotely
+          if (editor && updated.content) {
+            const currentJson = JSON.stringify(editor.getJSON());
+            const remoteJson = JSON.stringify(updated.content);
+            if (currentJson !== remoteJson) {
+              isRemoteUpdate.current = true;
+              // Preserve cursor position by using setContent cautiously
+              const { from, to } = editor.state.selection;
+              editor.commands.setContent(updated.content);
+              // Attempt to restore cursor (best effort)
+              try {
+                editor.commands.setTextSelection({ from, to });
+              } catch {
+                // ignore if selection is out of bounds after content change
+              }
+              isRemoteUpdate.current = false;
+              setWordCount(countWords(editor.getText()));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [editor, doc.id]);
 
   // Save on unmount
   useEffect(() => {
@@ -97,7 +138,7 @@ export default function DocEditor({ doc }: Props) {
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);
         if (editor) {
-          persistDoc(JSON.stringify(editor.getJSON()), titleRef.current);
+          persistDoc(editor.getJSON() as Record<string, unknown>, titleRef.current);
         }
       }
     };
@@ -108,7 +149,7 @@ export default function DocEditor({ doc }: Props) {
     const trimmed = title.trim() || 'Untitled document';
     setTitle(trimmed);
     if (editor) {
-      persistDoc(JSON.stringify(editor.getJSON()), trimmed);
+      persistDoc(editor.getJSON() as Record<string, unknown>, trimmed);
     }
   }
 

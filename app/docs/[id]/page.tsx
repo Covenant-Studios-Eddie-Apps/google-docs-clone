@@ -1,32 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { Document, getDocument, saveDocument } from '@/lib/storage';
 import DocEditor from '@/components/DocEditor';
 
 export default function DocPage() {
   const params = useParams();
-  const router = useRouter();
-  const id = params.id as string;
+  const id = (params.id as string) ?? uuidv4();
   const [doc, setDoc] = useState<Document | null>(null);
 
   useEffect(() => {
-    let found = getDocument(id);
-    if (!found) {
-      const now = Date.now();
-      found = {
-        id: id ?? uuidv4(),
-        title: 'Untitled document',
-        content: '',
-        createdAt: now,
-        updatedAt: now,
-      };
-      saveDocument(found);
+    async function loadDoc() {
+      let found = await getDocument(id);
+      if (!found) {
+        found = await saveDocument({
+          id,
+          title: 'Untitled document',
+          content: null,
+        });
+      }
+      setDoc(found);
     }
-    setDoc(found);
-  }, [id, router]);
+    loadDoc();
+  }, [id]);
 
   if (!doc) {
     return (

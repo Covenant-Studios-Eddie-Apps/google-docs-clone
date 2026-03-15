@@ -6,8 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Document, getAllDocuments, saveDocument, deleteDocument } from '@/lib/storage';
 import { FileText, Trash2, Plus } from 'lucide-react';
 
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString('en-US', {
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -16,33 +16,36 @@ function formatDate(ts: number): string {
 
 export default function DocList() {
   const [docs, setDocs] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    setDocs(getAllDocuments().sort((a, b) => b.updatedAt - a.updatedAt));
+    getAllDocuments().then((data) => {
+      setDocs(data);
+      setLoading(false);
+    });
   }, []);
 
-  function createDoc() {
-    const now = Date.now();
-    const doc: Document = {
-      id: uuidv4(),
+  async function createDoc() {
+    const id = uuidv4();
+    const doc = await saveDocument({
+      id,
       title: 'Untitled document',
-      content: '',
-      createdAt: now,
-      updatedAt: now,
-    };
-    saveDocument(doc);
-    router.push(`/docs/${doc.id}`);
+      content: null,
+    });
+    if (doc) {
+      router.push(`/docs/${doc.id}`);
+    }
   }
 
   function confirmDelete(id: string) {
     setDeleteId(id);
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleteId) return;
-    deleteDocument(deleteId);
+    await deleteDocument(deleteId);
     setDocs((prev) => prev.filter((d) => d.id !== deleteId));
     setDeleteId(null);
   }
@@ -73,7 +76,11 @@ export default function DocList() {
         </div>
 
         {/* Recent docs */}
-        {docs.length > 0 && (
+        {loading && (
+          <p className="text-sm text-gray-400 text-center mt-12">Loading documents...</p>
+        )}
+
+        {!loading && docs.length > 0 && (
           <div>
             <h2 className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wide">
               Recent documents
@@ -89,7 +96,7 @@ export default function DocList() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{doc.title}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Last modified {formatDate(doc.updatedAt)}
+                      Last modified {formatDate(doc.updated_at)}
                     </p>
                   </div>
                   <button
@@ -108,7 +115,7 @@ export default function DocList() {
           </div>
         )}
 
-        {docs.length === 0 && (
+        {!loading && docs.length === 0 && (
           <p className="text-sm text-gray-400 text-center mt-12">
             No documents yet. Create one above to get started.
           </p>

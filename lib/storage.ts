@@ -1,41 +1,61 @@
-export interface Document {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: number;
-  updatedAt: number;
-}
+import { supabase, Document } from './supabase';
 
-const STORAGE_KEY = 'docs_documents';
+export type { Document };
 
-export function getAllDocuments(): Document[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Document[];
-  } catch {
+export async function getAllDocuments(): Promise<Document[]> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching documents:', error);
     return [];
   }
+  return data ?? [];
 }
 
-export function getDocument(id: string): Document | null {
-  const docs = getAllDocuments();
-  return docs.find((d) => d.id === id) ?? null;
-}
+export async function getDocument(id: string): Promise<Document | null> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('id', id)
+    .single();
 
-export function saveDocument(doc: Document): void {
-  const docs = getAllDocuments();
-  const idx = docs.findIndex((d) => d.id === doc.id);
-  if (idx >= 0) {
-    docs[idx] = doc;
-  } else {
-    docs.unshift(doc);
+  if (error) {
+    if (error.code === 'PGRST116') return null; // not found
+    console.error('Error fetching document:', error);
+    return null;
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+  return data;
 }
 
-export function deleteDocument(id: string): void {
-  const docs = getAllDocuments().filter((d) => d.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+export async function saveDocument(doc: Partial<Document> & { id: string }): Promise<Document | null> {
+  const { data, error } = await supabase
+    .from('documents')
+    .upsert({
+      id: doc.id,
+      title: doc.title ?? 'Untitled document',
+      content: doc.content ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving document:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting document:', error);
+  }
 }
