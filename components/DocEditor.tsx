@@ -10,6 +10,7 @@ import Image from '@tiptap/extension-image';
 import { Document, saveDocument } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import EditorToolbar from './EditorToolbar';
+import AiChat from './AiChat';
 
 interface Props {
   doc: Document;
@@ -221,6 +222,16 @@ export default function DocEditor({ doc }: Props) {
       <div className="bg-white border-t border-gray-200 px-6 py-1.5 text-xs text-gray-500 flex justify-end">
         {wordCount} {wordCount === 1 ? 'word' : 'words'}
       </div>
+
+      {/* AI Chat */}
+      <AiChat
+        editor={editor}
+        docId={doc.id}
+        onDocUpdate={(newContent) => {
+          setSaveStatus('saving');
+          persistDoc(newContent, titleRef.current);
+        }}
+      />
     </div>
   );
 }
