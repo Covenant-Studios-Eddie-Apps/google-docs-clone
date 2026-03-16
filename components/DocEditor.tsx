@@ -76,7 +76,7 @@ export default function DocEditor({ doc }: Props) {
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none focus:outline-none min-h-[calc(100vh-300px)] px-16 py-12',
+          'max-w-none focus:outline-none min-h-[calc(100vh-300px)] px-16 py-12',
       },
     },
   });

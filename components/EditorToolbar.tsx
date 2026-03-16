@@ -20,7 +20,8 @@ import {
   Heading3,
   ImagePlus,
 } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface Props {
   editor: Editor | null;
@@ -60,22 +61,39 @@ function Divider() {
 
 export default function EditorToolbar({ editor }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   if (!editor) return null;
 
-  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const src = ev.target?.result as string;
-      if (src && editor) {
-        editor.chain().focus().setImage({ src }).run();
-      }
-    };
-    reader.readAsDataURL(file);
-    // reset so same file can be re-uploaded
+    if (!file || !editor) return;
     e.target.value = '';
+
+    setUploading(true);
+    try {
+      // Upload to Supabase Storage
+      const ext = file.name.split('.').pop();
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from('doc-images')
+        .upload(filename, file, { cacheControl: '3600', upsert: false });
+
+      if (error) {
+        // Fallback to base64 if bucket not set up
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const src = ev.target?.result as string;
+          if (src && editor) editor.chain().focus().setImage({ src }).run();
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const { data: urlData } = supabase.storage.from('doc-images').getPublicUrl(data.path);
+        editor.chain().focus().setImage({ src: urlData.publicUrl }).run();
+      }
+    } finally {
+      setUploading(false);
+    }
   }
 
   function handleImageUrl() {
@@ -228,8 +246,9 @@ export default function EditorToolbar({ editor }: Props) {
         <ToolbarButton
           onClick={() => fileInputRef.current?.click()}
           title="Upload image from device"
+          disabled={uploading}
         >
-          <ImagePlus size={16} />
+          {uploading ? <span className="text-xs">...</span> : <ImagePlus size={16} />}
         </ToolbarButton>
         <ToolbarButton
           onClick={handleImageUrl}
