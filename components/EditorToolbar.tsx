@@ -18,7 +18,9 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  ImagePlus,
 } from 'lucide-react';
+import { useRef } from 'react';
 
 interface Props {
   editor: Editor | null;
@@ -57,7 +59,31 @@ function Divider() {
 }
 
 export default function EditorToolbar({ editor }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   if (!editor) return null;
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      if (src) {
+        editor.chain().focus().setImage({ src }).run();
+      }
+    };
+    reader.readAsDataURL(file);
+    // reset so same file can be re-uploaded
+    e.target.value = '';
+  }
+
+  function handleImageUrl() {
+    const url = window.prompt('Paste image URL:');
+    if (url) {
+      editor.chain().focus().setImage({ src: url }).run();
+    }
+  }
 
   return (
     <div className="flex items-center flex-wrap gap-0.5 px-4 py-2 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
@@ -194,6 +220,31 @@ export default function EditorToolbar({ editor }: Props) {
       >
         <AlignRight size={16} />
       </ToolbarButton>
+
+      <Divider />
+
+      {/* Image insert */}
+      <div className="flex items-center gap-0.5">
+        <ToolbarButton
+          onClick={() => fileInputRef.current?.click()}
+          title="Upload image from device"
+        >
+          <ImagePlus size={16} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={handleImageUrl}
+          title="Insert image from URL"
+        >
+          <span className="text-xs font-medium px-0.5">URL</span>
+        </ToolbarButton>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageUpload}
+        />
+      </div>
     </div>
   );
 }

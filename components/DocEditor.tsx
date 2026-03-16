@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Typography from '@tiptap/extension-typography';
+import Image from '@tiptap/extension-image';
 import { Document, saveDocument } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import EditorToolbar from './EditorToolbar';
@@ -63,6 +64,7 @@ export default function DocEditor({ doc }: Props) {
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Typography,
+      Image.configure({ inline: false, allowBase64: true }),
     ],
     content: doc.content ?? '<p></p>',
     onUpdate: ({ editor }) => {
