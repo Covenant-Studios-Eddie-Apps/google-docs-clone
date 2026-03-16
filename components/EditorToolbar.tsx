@@ -69,7 +69,7 @@ export default function EditorToolbar({ editor }: Props) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const src = ev.target?.result as string;
-      if (src) {
+      if (src && editor) {
         editor.chain().focus().setImage({ src }).run();
       }
     };
@@ -80,7 +80,7 @@ export default function EditorToolbar({ editor }: Props) {
 
   function handleImageUrl() {
     const url = window.prompt('Paste image URL:');
-    if (url) {
+    if (url && editor) {
       editor.chain().focus().setImage({ src: url }).run();
     }
   }
