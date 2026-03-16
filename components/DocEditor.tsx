@@ -187,8 +187,21 @@ export default function DocEditor({ doc }: Props) {
             </h1>
           )}
         </div>
-        <div className="text-xs text-gray-400 shrink-0">
-          {saveStatus === 'saving' ? 'Saving...' : 'All changes saved'}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-xs text-gray-400">
+            {saveStatus === 'saving' ? 'Saving...' : 'All changes saved'}
+          </div>
+          <button
+            onClick={() => {
+              if (editor) {
+                setSaveStatus('saving');
+                persistDoc(editor.getJSON() as Record<string, unknown>, titleRef.current);
+              }
+            }}
+            className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-colors"
+          >
+            Save
+          </button>
         </div>
       </div>
 
